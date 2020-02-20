@@ -35,6 +35,7 @@ class ViewController: UIViewController {
     private let startPanelHeight: CGFloat = 200
     private var state: State = .collapse
     private var heightConstraint: NSLayoutConstraint!
+    private var latestNonZeroVelocity: CGFloat = 0
 
     // MARK: Animation Properties
 
@@ -73,10 +74,10 @@ class ViewController: UIViewController {
             modalController.view.trailingAnchor.constraint(equalTo: containerView.trailingAnchor)
         ])
 
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(onTapped(_:)))
-        tapGesture.numberOfTapsRequired = 1
-        tapGesture.numberOfTouchesRequired = 1
-        containerView.addGestureRecognizer(tapGesture)
+//        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(onTapped(_:)))
+//        tapGesture.numberOfTapsRequired = 1
+//        tapGesture.numberOfTouchesRequired = 1
+//        containerView.addGestureRecognizer(tapGesture)
 
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(onDrag))
         panGesture.maximumNumberOfTouches = 1
@@ -97,13 +98,30 @@ class ViewController: UIViewController {
             animator.pauseAnimation()
             animationProgress = animator.fractionComplete
         case .changed:
+            let velocity = recognizer.velocity(in: containerView)
+            if velocity.y != 0 {
+                self.latestNonZeroVelocity = velocity.y
+            }
+
             let translation = recognizer.translation(in: containerView)
-            var fraction = -translation.y / view.frame.height
+            var fraction = -translation.y / (view.frame.height - startPanelHeight)
             if state == .expand {
                 fraction *= -1
             }
             animator.fractionComplete = fraction + animationProgress
         case .ended:
+            if self.latestNonZeroVelocity < 0 && state == .expand {
+                animator.isReversed = true
+                animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+                break
+            }
+
+            if self.latestNonZeroVelocity > 0 && state == .collapse {
+                animator.isReversed = true
+                animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+                break
+            }
+
             animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
         default:
             break
@@ -133,6 +151,8 @@ extension ViewController {
 
         animator.addCompletion { position in
             switch position {
+            case .start:
+                self.heightConstraint.constant = self.startPanelHeight
             case .end:
                 self.state = self.state.change
             default:
@@ -151,6 +171,8 @@ extension ViewController {
 
         animator.addCompletion { position in
             switch position {
+            case .start:
+                self.heightConstraint.constant = self.view.frame.height
             case .end:
                 self.state = self.state.change
             default:
