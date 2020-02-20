@@ -21,19 +21,29 @@ class ViewController: UIViewController {
         }
     }
 
-    private let startPanelHeight: CGFloat = 200
-    private var state: State = .collapse
-    private lazy var animator: UIViewPropertyAnimator = {
-        UIViewPropertyAnimator(duration: 0.3, curve: .easeInOut)
-    }()
+    // MARK: Views
 
-    private var heightConstraint: NSLayoutConstraint!
     private lazy var containerView: UIView = {
         let view = UIView()
         view.backgroundColor = .red
         view.clipsToBounds = true
         return view
     }()
+
+    // MARK: Panel Properties
+
+    private let startPanelHeight: CGFloat = 200
+    private var state: State = .collapse
+    private var heightConstraint: NSLayoutConstraint!
+
+    // MARK: Animation Properties
+
+    private lazy var animator: UIViewPropertyAnimator = {
+        UIViewPropertyAnimator(duration: 0.3, curve: .easeInOut)
+    }()
+    private var animationProgress: CGFloat = 0
+
+    // MARK: Lifecycle
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -68,36 +78,36 @@ class ViewController: UIViewController {
         tapGesture.numberOfTouchesRequired = 1
         containerView.addGestureRecognizer(tapGesture)
 
-//        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(onDrag))
-//        panGesture.maximumNumberOfTouches = 1
-//        panGesture.minimumNumberOfTouches = 1
-//        containerView.addGestureRecognizer(panGesture)
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(onDrag))
+        panGesture.maximumNumberOfTouches = 1
+        panGesture.minimumNumberOfTouches = 1
+        containerView.addGestureRecognizer(panGesture)
     }
 
+    // MARK: Gestures
+
     @objc func onTapped(_ sender: Any) {
-        switch state {
-        case .expand:
-            collapse()
-        case .collapse:
-            expand()
-        }
+        togglePanel()
     }
 
     @objc func onDrag(recognizer: UIPanGestureRecognizer) {
-//        switch recognizer.state {
-//        case .changed:
-//            let translation = recognizer.translation(in: containerView)
-//            let newPanelHeight = currentPanelHeight + -translation.y
-//            guard newPanelHeight <= view.frame.height else {
-//                break
-//            }
-//            heightConstraint.constant = newPanelHeight
-//            print("lol -> translation: \(-translation.y)")
-//        case .ended:
-//            currentPanelHeight =  heightConstraint.constant
-//        default:
-//            break
-//        }
+        switch recognizer.state {
+        case .began:
+            togglePanel()
+            animator.pauseAnimation()
+            animationProgress = animator.fractionComplete
+        case .changed:
+            let translation = recognizer.translation(in: containerView)
+            var fraction = -translation.y / view.frame.height
+            if state == .expand {
+                fraction *= -1
+            }
+            animator.fractionComplete = fraction + animationProgress
+        case .ended:
+            animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+        default:
+            break
+        }
     }
 
 }
@@ -106,7 +116,16 @@ class ViewController: UIViewController {
 
 extension ViewController {
 
-    func expand() {
+    private func togglePanel() {
+        switch state {
+        case .expand:
+            collapse()
+        case .collapse:
+            expand()
+        }
+    }
+
+    private func expand() {
         animator.addAnimations {
             self.heightConstraint.constant = self.view.frame.height
             self.view.layoutIfNeeded()
@@ -124,7 +143,7 @@ extension ViewController {
         animator.startAnimation()
     }
 
-    func collapse() {
+    private func collapse() {
         animator.addAnimations {
             self.heightConstraint.constant = self.startPanelHeight
             self.view.layoutIfNeeded()
