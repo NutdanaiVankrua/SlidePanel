@@ -29,6 +29,7 @@ class ViewController: UIViewController {
         view.clipsToBounds = true
         return view
     }()
+    private var scrollView: UIScrollView?
 
     // MARK: Panel Properties
 
@@ -36,6 +37,7 @@ class ViewController: UIViewController {
     private var state: State = .collapse
     private var heightConstraint: NSLayoutConstraint!
     private var latestNonZeroVelocity: CGFloat = 0
+    private var innerScrollViewFirstTranslationY: CGFloat = 0
 
     // MARK: Animation Properties
 
@@ -79,10 +81,12 @@ class ViewController: UIViewController {
 //        tapGesture.numberOfTouchesRequired = 1
 //        containerView.addGestureRecognizer(tapGesture)
 
-        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(onDrag))
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(onDrag(_:)))
         panGesture.maximumNumberOfTouches = 1
         panGesture.minimumNumberOfTouches = 1
         containerView.addGestureRecognizer(panGesture)
+
+        listenToScrollView(modalController.scrollView)
     }
 
     // MARK: Gestures
@@ -91,7 +95,7 @@ class ViewController: UIViewController {
         togglePanel()
     }
 
-    @objc func onDrag(recognizer: UIPanGestureRecognizer) {
+    @objc func onDrag(_ recognizer: UIPanGestureRecognizer) {
         switch recognizer.state {
         case .began:
             togglePanel()
@@ -110,19 +114,99 @@ class ViewController: UIViewController {
             }
             animator.fractionComplete = fraction + animationProgress
         case .ended:
-            if self.latestNonZeroVelocity < 0 && state == .expand {
+            if latestNonZeroVelocity < 0 && state == .expand {
                 animator.isReversed = true
                 animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
                 break
             }
 
-            if self.latestNonZeroVelocity > 0 && state == .collapse {
+            if latestNonZeroVelocity > 0 && state == .collapse {
                 animator.isReversed = true
                 animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
                 break
             }
 
             animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+
+            latestNonZeroVelocity = 0
+        default:
+            break
+        }
+    }
+
+}
+
+// MARK: - Support Inner Scroll View
+
+extension ViewController: UIGestureRecognizerDelegate {
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
+        return true
+    }
+
+    func listenToScrollView(_ scrollView: UIScrollView) {
+        let innerPanGesture = UIPanGestureRecognizer(target: self, action: #selector(onDragInnerScrollView(_:)))
+        innerPanGesture.delegate = self
+        self.scrollView = scrollView
+        self.scrollView?.addGestureRecognizer(innerPanGesture)
+    }
+
+    @objc func onDragInnerScrollView(_ recognizer: UIPanGestureRecognizer) {
+        if state == .collapse {
+            scrollView?.contentOffset = CGPoint(x: 0, y: 0)
+        }
+
+        if state == .expand && (scrollView?.contentOffset.y ?? 0) > 0 {
+            scrollView?.showsVerticalScrollIndicator = true
+            return
+        }
+
+        scrollView?.showsVerticalScrollIndicator = false
+
+        switch recognizer.state {
+        case .changed:
+            let translation = recognizer.translation(in: containerView)
+
+            if animator.state == .inactive {
+                togglePanel()
+                animator.pauseAnimation()
+                animationProgress = animator.fractionComplete
+
+                innerScrollViewFirstTranslationY = (-translation.y)
+                if state == .expand {
+                    innerScrollViewFirstTranslationY *= -1
+                }
+            }
+
+            let velocity = recognizer.velocity(in: containerView)
+            if velocity.y != 0 {
+                self.latestNonZeroVelocity = velocity.y
+            }
+
+            var fraction = (-translation.y + innerScrollViewFirstTranslationY) / (view.frame.height - startPanelHeight)
+            if state == .expand {
+                fraction *= -1
+            }
+            animator.fractionComplete = fraction + animationProgress
+        case .ended:
+            if latestNonZeroVelocity < 0 && state == .expand {
+                animator.isReversed = true
+                animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+                break
+            }
+
+            if latestNonZeroVelocity > 0 && state == .collapse {
+                animator.isReversed = true
+                animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+                break
+            }
+
+            animator.continueAnimation(withTimingParameters: nil, durationFactor: 0)
+
+            latestNonZeroVelocity = 0
+
+            innerScrollViewFirstTranslationY = 0
+            scrollView?.showsVerticalScrollIndicator = true
         default:
             break
         }
@@ -189,24 +273,53 @@ extension ViewController {
 
 class ModalViewController: UIViewController {
 
-    private lazy var cardView: UIView = {
-        let view = UIView()
-        view.backgroundColor = .green
-        return view
+//    private lazy var cardView: UIView = {
+//        let view = UIView()
+//        view.backgroundColor = .green
+//        return view
+//    }()
+
+    lazy var scrollView: UIScrollView = {
+        let scrollView = UIScrollView()
+        scrollView.backgroundColor = .orange
+        return scrollView
+    }()
+
+    private lazy var contentView: UIView = {
+        UIView()
     }()
 
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .blue
 
-        view.addSubview(cardView)
+//        view.addSubview(cardView)
+//        cardView.translatesAutoresizingMaskIntoConstraints = false
+//        NSLayoutConstraint.activate([
+//            cardView.topAnchor.constraint(equalTo: view.topAnchor, constant: 100),
+//            cardView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -100),
+//            cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+//            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
+//        ])
 
-        cardView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(scrollView)
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
-            cardView.topAnchor.constraint(equalTo: view.topAnchor, constant: 100),
-            cardView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -100),
-            cardView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            cardView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
+            scrollView.topAnchor.constraint(equalTo: view.topAnchor, constant: 100),
+            scrollView.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -100),
+            scrollView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
+            scrollView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -40)
+        ])
+
+        scrollView.addSubview(contentView)
+        contentView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: scrollView.topAnchor),
+            contentView.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor),
+            contentView.leadingAnchor.constraint(equalTo: scrollView.leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: scrollView.trailingAnchor),
+            contentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor),
+            contentView.heightAnchor.constraint(equalToConstant: 800)
         ])
     }
 
