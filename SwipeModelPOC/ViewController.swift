@@ -86,7 +86,7 @@ class ViewController: UIViewController {
         panGesture.minimumNumberOfTouches = 1
         containerView.addGestureRecognizer(panGesture)
 
-        listenToScrollView(modalController.scrollView)
+        trackScrollView(modalController.scrollView)
     }
 
     // MARK: Gestures
@@ -144,7 +144,7 @@ extension ViewController: UIGestureRecognizerDelegate {
         return true
     }
 
-    func listenToScrollView(_ scrollView: UIScrollView) {
+    func trackScrollView(_ scrollView: UIScrollView) {
         let innerPanGesture = UIPanGestureRecognizer(target: self, action: #selector(onDragInnerScrollView(_:)))
         innerPanGesture.delegate = self
         self.scrollView = scrollView
